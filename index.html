@@ -114,9 +114,6 @@
 
 <div class="pdf-container">
   <div class="controls">
-    <button onclick="zoomOut()">−</button>
-    <span id="zoomLevel">100%</span>
-    <button onclick="zoomIn()">+</button>
     <button onclick="fitToScreen()">Fit</button>
     <button onclick="resetOrientation()">Vertical</button>
     <button onclick="landscapePages()">Landscape</button>
@@ -209,8 +206,6 @@ pdfViewer.addEventListener("scroll", () => {
 function nextPage(){ scrollToPage(currentPage+1); }
 function prevPage(){ scrollToPage(currentPage-1); }
 
-function zoomIn() { fitMode=false; landscapeMode=false; zoom+=0.2; rerenderAllPages(); }
-function zoomOut() { fitMode=false; landscapeMode=false; if(zoom>0.6) zoom-=0.2; rerenderAllPages(); }
 function fitToScreen() { fitMode=true; landscapeMode=false; rerenderAllPages(); }
 function resetOrientation() { rotation=0; landscapeMode=false; rerenderAllPages(); }
 function landscapePages() { rotation=0; landscapeMode=true; rerenderAllPages(); }
