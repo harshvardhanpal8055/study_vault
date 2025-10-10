@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Reliable PDF Viewer Fixed</title>
+<style>
+body, html { margin:0; height:100%; background:#111; overflow:hidden; }
+#toolbar {
+  position:fixed; top:0; left:0; right:0; height:50px;
+  background:#222; display:flex; align-items:center; justify-content:space-around;
+  color:white; z-index:10;
+}
+#pdf-container { 
+  position:absolute; top:50px; bottom:0; left:0; right:0;
+  overflow:auto; 
+  -webkit-overflow-scrolling: touch;
+}
+#canvas-wrapper {
+  display: inline-block;
+  margin: 0 auto;
+  position: relative;
+}
+canvas {
+  background:white;
+  display:block;
+  transform-origin: 0 0;
+}
+button { background:#3498db; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer; font-weight:bold; }
+button:hover { background:#2c80b4; }
+#pageInfo { color:white; font-weight:bold; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button id="prev">◀ Prev</button>
+  <span id="pageInfo">Page 1 / 1</span>
+  <button id="next">Next ▶</button>
+  <button id="zoomOut">Zoom -</button>
+  <button id="zoomIn">Zoom +</button>
+  <button id="fit">Fit</button>
+</div>
+
+<div id="pdf-container">
+  <div id="canvas-wrapper">
+    <canvas id="pdf-render"></canvas>
+  </div>
+</div>
+
+<script type="module">
+import * as pdfjsLib from './pdfjs/pdf.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = './pdfjs/pdf.worker.mjs';
+
+const urlParams = new URLSearchParams(window.location.search);
+const pdfFile = urlParams.get('file');
+const url = './pdfs/' + pdfFile;
+
+let pdfDoc = null, pageNum = 1, scale = 1.0;
+const canvas = document.getElementById('pdf-render');
+const wrapper = document.getElementById('canvas-wrapper');
+const ctx = canvas.getContext('2d');
+const pageInfo = document.getElementById('pageInfo');
+const container = document.getElementById('pdf-container');
+
+// Update wrapper size based on scale
+function updateWrapperSize(){
+    const scaledWidth = canvas.width * scale;
+    const scaledHeight = canvas.height * scale;
+    wrapper.style.width = scaledWidth + 'px';
+    wrapper.style.height = scaledHeight + 'px';
+    canvas.style.transform = `scale(${scale})`;
+}
+
+// Render PDF page
+function renderPage(num){
+    pdfDoc.getPage(num).then(page=>{
+        const viewport = page.getViewport({ scale:1 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        page.render({ canvasContext: ctx, viewport }).promise.then(()=>{
+            updateWrapperSize();
+            pageInfo.textContent = `Page ${pageNum} / ${pdfDoc.numPages}`;
+        });
+    });
+}
+
+// Fit PDF to screen
+function fitToScreen(page){
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    const viewport = page.getViewport({ scale: 1 });
+    const scaleX = containerWidth / viewport.width;
+    const scaleY = containerHeight / viewport.height;
+    return Math.min(scaleX, scaleY);
+}
+
+// Load PDF
+pdfjsLib.getDocument(url).promise.then(pdf=>{
+    pdfDoc = pdf;
+    pdfDoc.getPage(pageNum).then(page=>{
+        scale = fitToScreen(page);
+        renderPage(pageNum);
+    });
+});
+
+// Navigation
+document.getElementById('prev').addEventListener('click', ()=>{ if(pageNum>1){ pageNum--; renderPage(pageNum); }});
+document.getElementById('next').addEventListener('click', ()=>{ if(pageNum<pdfDoc.numPages){ pageNum++; renderPage(pageNum); }});
+
+// Zoom buttons
+document.getElementById('zoomIn').addEventListener('click', ()=>{ 
+    scale+=0.2; 
+    updateWrapperSize();
+});
+document.getElementById('zoomOut').addEventListener('click', ()=>{ 
+    scale=Math.max(0.2, scale-0.2); 
+    updateWrapperSize();
+});
+document.getElementById('fit').addEventListener('click', ()=>{ 
+    pdfDoc.getPage(pageNum).then(page=>{
+        scale = fitToScreen(page); 
+        renderPage(pageNum); 
+    });
+});
+
+// Back button support
+history.pushState(null,null,location.href);
+window.addEventListener('popstate', ()=>{ window.location.href='index.html'; });
+
+// Disable right-click
+document.addEventListener('contextmenu', e=>e.preventDefault());
+
+// Touch handling for smooth pinch zoom
+let lastDistance = null;
+let initialPinchScale = null;
+
+canvas.addEventListener('touchstart', e=>{
+    if(e.touches.length === 2){
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        lastDistance = Math.hypot(dx, dy);
+        initialPinchScale = scale;
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e=>{
+    if(e.touches.length === 2 && lastDistance){
+        e.preventDefault();
+        
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const newDistance = Math.hypot(dx, dy);
+        
+        // Smooth pinch zoom
+        const ratio = newDistance / lastDistance;
+        scale = Math.max(0.2, Math.min(5, initialPinchScale * ratio));
+        
+        updateWrapperSize();
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e=>{
+    if(e.touches.length < 2){
+        lastDistance = null;
+        initialPinchScale = null;
+    }
+});
+</script>
+
+</body>
+</html>
